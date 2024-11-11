@@ -17,11 +17,12 @@ var banner string = `
 func main() {
 
 	// set up command line args
-	serverCertPtr := flag.String("server-cert", "certs/server/server.crt", "path  server cert file")
-	serverKeyPtr := flag.String("server-key", "certs/server/server.key", "path server private key file")
+	serverCertPtr := flag.String("server-cert", "certs/server/server_cert.pem", "path  server cert file")
+	serverKeyPtr := flag.String("server-key", "certs/server/server_private_key.pem", "path server private key file")
+	agentCertPtr := flag.String("agent-cert", "certs/agent/agent_cert.pem", "path server private key file")
 	flag.Parse()
 
 	fmt.Println(banner)
 
-	server.Start(*serverCertPtr, *serverKeyPtr)
+	server.Start(*serverCertPtr, *serverKeyPtr, *agentCertPtr)
 }
