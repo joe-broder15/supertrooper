@@ -9,9 +9,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/joe-broder15/supertrooper/internal/auth"
+	"github.com/joe-broder15/supertrooper/internal/crypto"
 	"github.com/joe-broder15/supertrooper/internal/messages"
 )
+
+type Server struct {
+}
 
 func Start(serverPubKeyFile string, serverPrivKeyFile string, agentPubKeyFile string) {
 
@@ -72,14 +75,14 @@ func Start(serverPubKeyFile string, serverPrivKeyFile string, agentPubKeyFile st
 			}
 
 			// sign the agent nonce
-			signedAgentNonce, err := auth.RSASignNonce(serverKeyPair, agentMessageBody.AgentNonce)
+			signedAgentNonce, err := crypto.RSASignNonce(serverKeyPair, agentMessageBody.AgentNonce)
 			if err != nil {
 				log.Printf("failed to sign agent nonce: %v", err)
 				return
 			}
 
 			// get a nonce to send to the agent
-			serverNonce, err := auth.GenerateRandomBytes()
+			serverNonce, err := crypto.GenerateRandomBytes()
 			if err != nil {
 				log.Printf("failed to generate server nonce: %v", err)
 				return

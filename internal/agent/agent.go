@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/joe-broder15/supertrooper/internal/auth"
+	"github.com/joe-broder15/supertrooper/internal/crypto"
 	"github.com/joe-broder15/supertrooper/internal/messages"
 )
 
@@ -72,7 +72,7 @@ func Start(agentCertPEM []byte, agentKeyPEM []byte, serverCertPEM []byte) {
 	client := &http.Client{Transport: transport}
 
 	// get a nonce to send to the agent
-	agentNonce, err := auth.GenerateRandomBytes()
+	agentNonce, err := crypto.GenerateRandomBytes()
 	if err != nil {
 		log.Printf("failed to generate agent nonce: %v", err)
 		return
@@ -103,7 +103,7 @@ func Start(agentCertPEM []byte, agentKeyPEM []byte, serverCertPEM []byte) {
 		log.Fatalln(err)
 	}
 
-	result, err := auth.RSAVerifySignature(serverCertPEM, message.SignedAgentNonce, agentNonce)
+	result, err := crypto.RSAVerifySignature(serverCertPEM, message.SignedAgentNonce, agentNonce)
 	if err != nil {
 		log.Fatalln(err)
 	}
