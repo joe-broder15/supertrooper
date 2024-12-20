@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -31,36 +29,11 @@ func Start(agentCertPEM []byte, agentKeyPEM []byte, serverCertPEM []byte) {
 		log.Fatalln("Failed to append server certificate to pool")
 	}
 
-	// Parse the expected server certificate
-	block, _ := pem.Decode(serverCertPEM)
-	if block == nil {
-		log.Fatalln("Failed to decode expected server certificate PEM")
-	}
-	expectedServerCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		log.Fatalf("Failed to parse expected server certificate: %v", err)
-	}
-
 	// Configure TLS with custom verification
 	tlsConfig := &tls.Config{
 		Certificates:       []tls.Certificate{agentCert},
 		RootCAs:            serverCertPool,
-		InsecureSkipVerify: true, // Skip default verification
-		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			// Parse the presented server certificate
-			if len(rawCerts) == 0 {
-				return errors.New("no server certificates presented")
-			}
-			presentedCert, err := x509.ParseCertificate(rawCerts[0])
-			if err != nil {
-				return fmt.Errorf("failed to parse presented server certificate: %v", err)
-			}
-			// Compare with the expected server certificate
-			if !presentedCert.Equal(expectedServerCert) {
-				return errors.New("server certificate does not match expected certificate")
-			}
-			return nil
-		},
+		InsecureSkipVerify: true,
 	}
 
 	// create https client

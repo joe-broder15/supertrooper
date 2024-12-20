@@ -13,9 +13,6 @@ import (
 	"github.com/joe-broder15/supertrooper/internal/messages"
 )
 
-type Server struct {
-}
-
 func Start(serverPubKeyFile string, serverPrivKeyFile string, agentPubKeyFile string) {
 
 	// Load server certificate and private key
