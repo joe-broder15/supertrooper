@@ -1,85 +1,52 @@
 package agent
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/joe-broder15/supertrooper/internal/crypto"
-	"github.com/joe-broder15/supertrooper/internal/messages"
 )
 
-func Start(agentCertPEM []byte, agentKeyPEM []byte, serverCertPEM []byte) {
-	fmt.Println("starting agent")
+func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte, serverCertPEM []byte) {
+	fmt.Println("starting agent as mTLS client")
 
-	// Load agent certificate and private key from embedded data
+	// Load the agent's certificate and key for client identity
 	agentCert, err := tls.X509KeyPair(agentCertPEM, agentKeyPEM)
 	if err != nil {
-		log.Fatalf("Failed to load agent certificate: %v\n", err)
+		log.Fatalf("agent: error loading key pair: %v", err)
 	}
 
-	// Create a CertPool with the server certificate
-	serverCertPool := x509.NewCertPool()
-	if !serverCertPool.AppendCertsFromPEM(serverCertPEM) {
-		log.Fatalln("Failed to append server certificate to pool")
+	// Create a CA pool with the provided CA certificate to verify the server
+	caCertPool := x509.NewCertPool()
+	if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
+		log.Fatal("agent: failed to append CA certificate")
 	}
 
-	// Configure TLS with custom verification
+	// Configure mTLS settings for the client
 	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{agentCert},
-		RootCAs:            serverCertPool,
-		InsecureSkipVerify: true,
+		Certificates: []tls.Certificate{agentCert},
+		RootCAs:      caCertPool,
+		MinVersion:   tls.VersionTLS13,
+		// Optionally set ServerName if needed for hostname verification
+		// ServerName: "your.server.domain",
 	}
 
-	// create https client
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-		MaxIdleConns:    10,
-		IdleConnTimeout: 30 * time.Second,
+	// Create an HTTP client with the custom TLS transport
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: 10 * time.Second,
 	}
-	client := &http.Client{Transport: transport}
 
-	// get a nonce to send to the agent
-	agentNonce, err := crypto.GenerateRandomBytes()
+	// Make an example HTTPS request to the mTLS server
+	resp, err := httpClient.Get("https://localhost:8443")
 	if err != nil {
-		log.Printf("failed to generate agent nonce: %v", err)
-		return
+		log.Fatalf("agent: error making HTTPS request: %v", err)
 	}
+	defer resp.Body.Close()
 
-	// create payload
-	challengeRequest, err := messages.NewAgentChallengeRequest(agentNonce)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// post data
-	resp, err := client.Post("https://localhost/challenge", "application/json", bytes.NewBuffer(challengeRequest))
-	if err != nil {
-		log.Println("ERROR")
-		log.Fatalln(err)
-	}
-
-	// get response
-	responseBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// parse response
-	message, err := messages.ParseServerChallengeResponseBody(responseBytes)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	result, err := crypto.RSAVerifySignature(serverCertPEM, message.SignedAgentNonce, agentNonce)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	println(result)
+	fmt.Printf("agent: received response with status: %s\n", resp.Status)
 }

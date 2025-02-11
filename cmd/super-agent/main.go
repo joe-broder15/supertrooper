@@ -17,6 +17,9 @@ var agentKeyPEM []byte
 //go:embed embed/server_cert.pem
 var serverCertPEM []byte
 
+//go:embed embed/ca_cert.pem
+var caCertPEM []byte
+
 func main() {
-	agent.Start(agentCertPEM, agentKeyPEM, serverCertPEM)
+	agent.Start(caCertPEM, agentCertPEM, agentKeyPEM, serverCertPEM)
 }
