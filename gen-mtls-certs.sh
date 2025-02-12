@@ -43,7 +43,7 @@ openssl x509 -req -in ./certs/agent/agent.csr -CA ./certs/ca/ca_cert.pem -CAkey 
 cp ./certs/server/server_cert.pem cmd/super-agent/embed/server_cert.pem
 cp ./certs/agent/agent_cert.pem cmd/super-agent/embed/agent_cert.pem
 cp ./certs/agent/agent_private_key.pem cmd/super-agent/embed/agent_private_key.pem
-cp ./certs/ca/ca_cert.pem cmd/super-agent/embed/ca_cert.pem
+cp ./certs/ca/ca_cert.pem cmd/super-agent/embed/ca_cert.pem 
 
 echo "Cleaning up temporary files..."
 rm -f ./certs/server/server.csr ./certs/agent/agent.csr ./certs/ca/ca_cert.srl

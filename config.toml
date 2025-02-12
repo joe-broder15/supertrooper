@@ -1,0 +1,10 @@
+[agent-defaults]
+isPersistent = true
+beaconSeconds = 60
+missesBeforeDeath = 3
+isLive = false
+
+[server]
+port = 443
+jobChannelSize = 512
+

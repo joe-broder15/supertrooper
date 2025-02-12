@@ -1,6 +1,4 @@
 #!/bin/bash
-./gen-mtls-certs.sh
-
 echo "building super-c2"
 go build -o super-c2.exe cmd/super-c2/main.go 
 
