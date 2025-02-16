@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/joe-broder15/supertrooper/internal/messages"
@@ -33,8 +34,8 @@ type AgentState struct {
 	maxMisses int
 
 	// Time intervals for beaconing and keepalive communication with the server (in seconds).
-	beaconInterval  int
-	keepAlivePeriod int
+	beaconInterval int
+	wakeUpSeconds  int
 }
 
 // initTLSConfig creates a new TLS configuration using the provided certificates.
@@ -64,16 +65,16 @@ func initTLSConfig(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) *t
 // newAgentState initializes and returns a new instance of AgentState.
 func newAgentState(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte, serverAddr string) *AgentState {
 	return &AgentState{
-		caCertPEM:       caCertPEM,
-		agentCertPEM:    agentCertPEM,
-		agentKeyPEM:     agentKeyPEM,
-		tlsConfig:       initTLSConfig(caCertPEM, agentCertPEM, agentKeyPEM),
-		serverAddr:      serverAddr,
-		id:              "none",
-		isPersistent:    false,
-		maxMisses:       3,
-		beaconInterval:  10,
-		keepAlivePeriod: 10,
+		caCertPEM:      caCertPEM,
+		agentCertPEM:   agentCertPEM,
+		agentKeyPEM:    agentKeyPEM,
+		tlsConfig:      initTLSConfig(caCertPEM, agentCertPEM, agentKeyPEM),
+		serverAddr:     serverAddr,
+		id:             "none",
+		isPersistent:   false,
+		maxMisses:      3,
+		beaconInterval: 10,
+		wakeUpSeconds:  10,
 	}
 }
 
@@ -102,16 +103,23 @@ func communicateWithServer(agentState *AgentState) error {
 	decoder := json.NewDecoder(conn)
 
 	// Send hello message to initiate communication.
-	helloMsg := messages.BuildHelloMessage(agentState.id, true, true, agentState.beaconInterval, agentState.maxMisses)
+	helloMsg := messages.BuildHelloMessage(
+		agentState.id,
+		agentState.isPersistent,
+		agentState.beaconInterval,
+		agentState.maxMisses,
+		int(time.Now().Unix()+int64(agentState.wakeUpSeconds+(agentState.maxMisses*agentState.beaconInterval))),
+		agentState.wakeUpSeconds,
+		int(time.Now().Unix()+int64(agentState.beaconInterval+agentState.wakeUpSeconds)),
+	)
 	if err := encoder.Encode(helloMsg); err != nil {
 		return fmt.Errorf("agent: error sending hello message: %w", err)
 	}
 
 	log.Println("agent: hello message sent")
-	log.Println("agent: waiting for server messages")
 
 	// Maintain a keepalive loop for the specified period.
-	keepAliveDeadline := time.Now().Add(time.Duration(agentState.keepAlivePeriod) * time.Second)
+	keepAliveDeadline := time.Now().Add(time.Duration(agentState.wakeUpSeconds) * time.Second)
 	for time.Now().Before(keepAliveDeadline) {
 
 		// Set a read timeout (e.g., 5 seconds)
@@ -146,7 +154,13 @@ func communicateWithServer(agentState *AgentState) error {
 	}
 
 	// Send goodbye message before closing the connection.
-	goodbyeMsg := messages.BuildGoodbyeMessage("none", agentState.beaconInterval)
+	currentTime := int(time.Now().Unix())
+	goodbyeMsg := messages.BuildGoodbyeMessage(
+		agentState.id,
+		agentState.beaconInterval,
+		currentTime,
+		currentTime+agentState.beaconInterval,
+	)
 	if err := encoder.Encode(goodbyeMsg); err != nil {
 		return fmt.Errorf("agent: error sending goodbye message: %w", err)
 	}
@@ -156,6 +170,12 @@ func communicateWithServer(agentState *AgentState) error {
 	return nil
 }
 
+// routine that runs when the agent dies
+func die() {
+	log.Println("agent: dying")
+	os.Exit(0)
+}
+
 // Start is the entry point for the agent. It initializes the state and
 // enters a loop to repeatedly beacon the server.
 func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) {
@@ -163,8 +183,10 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) {
 
 	agentState := newAgentState(caCertPEM, agentCertPEM, agentKeyPEM, "localhost:443")
 
+	missedBeacons := 0
+
 	// beacon every beaconInterval seconds until maxMisses is reached
-	for missedBeacons := 0; missedBeacons < agentState.maxMisses; missedBeacons++ {
+	for missedBeacons < agentState.maxMisses {
 		log.Println("agent: beaconing to server")
 		if err := communicateWithServer(agentState); err != nil {
 			log.Println("agent: error communicating with server: ", err)
@@ -174,5 +196,9 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) {
 		}
 		log.Println("agent: sleeping for ", agentState.beaconInterval, " seconds")
 		time.Sleep(time.Duration(agentState.beaconInterval) * time.Second)
+	}
+
+	if missedBeacons >= agentState.maxMisses {
+		die()
 	}
 }

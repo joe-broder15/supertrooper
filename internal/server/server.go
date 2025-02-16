@@ -55,7 +55,7 @@ func initTLSConfig(serverCertFile string, serverKeyFile string, caCertFile strin
 }
 
 // handleAgentConnection handles the connection from the agent and sends messages to the channel
-func handleAgentConnection(tlsConn *tls.Conn) {
+func handleAgentConnection(tlsConn *tls.Conn, eventChannel chan ServerEvent) {
 	defer tlsConn.Close()
 
 	log.Println("server: handling agent connection from ip:", tlsConn.RemoteAddr())
@@ -63,6 +63,7 @@ func handleAgentConnection(tlsConn *tls.Conn) {
 	// create a decoder to read messages from the agent
 	decoder := json.NewDecoder(tlsConn)
 
+	// read messages from the agent and send them to the event channel
 	for {
 		// read the hello message from the agent
 		var message messages.C2MessageBase
@@ -78,23 +79,19 @@ func handleAgentConnection(tlsConn *tls.Conn) {
 			return
 		}
 
-		// pretty print the message
-		prettyMessage := prettyPrintJSON(message.C2MessagePayload)
-		log.Println(prettyMessage)
-
-		// if the job was a hello, send a response to the agent
-		if message.Type == messages.C2MessageTypeHello {
-			printPayload := messages.BuildJobPayloadPrint("hello")
-			response := messages.BuildJobDispatchMessage("server", "123", messages.JobTypePrint, printPayload)
-			encoder := json.NewEncoder(tlsConn)
-			encoder.Encode(response)
+		// send the message to the event channel
+		eventChannel <- ServerEvent{
+			Type: ServerEventTypeAgentC2Message,
+			Body: ServerEventAgentC2Message{
+				Message:   message,
+				AgentConn: tlsConn,
+			},
 		}
-
 	}
 }
 
 // startTlsListener starts the TLS listener and sends messages to the channel
-func startTlsListener(tlsConfig *tls.Config) {
+func startTlsListener(tlsConfig *tls.Config, eventChannel chan ServerEvent) {
 	// Create a TLS listener directly on a TCP socket
 	listener, err := tls.Listen("tcp", ":443", tlsConfig)
 	if err != nil {
@@ -110,7 +107,7 @@ func startTlsListener(tlsConfig *tls.Config) {
 		}
 
 		// handle the agent connection
-		go handleAgentConnection(conn.(*tls.Conn))
+		go handleAgentConnection(conn.(*tls.Conn), eventChannel)
 	}
 }
 
@@ -120,22 +117,17 @@ func Start(serverCertFile string, serverKeyFile string, caCertFile string, confi
 	// initialize TLS config
 	tlsConfig := initTLSConfig(serverCertFile, serverKeyFile, caCertFile)
 
+	// agent manager
+	agentManager := NewAgentManager()
+
 	// create a channel to send messages to the agent
-	// agentMessageChannel := make(chan messages.C2MessageBase, 512)
+	eventChannel := make(chan ServerEvent, 512)
 
 	// start the agent listener
-	go startTlsListener(tlsConfig)
+	go startTlsListener(tlsConfig, eventChannel)
 
-	// wait for the above function to finish
-	select {}
-
-	// // read messages from the agent and pretty print the json
-	// for message := range agentMessageChannel {
-	// 	prettyMessage, err := json.MarshalIndent(message, "", "    ")
-	// 	if err != nil {
-	// 		log.Printf("server: error pretty printing AgentHello message: %v", err)
-	// 	} else {
-	// 		fmt.Println(string(prettyMessage))
-	// 	}
-	// }
+	// consume and handle events from the channel
+	for event := range eventChannel {
+		processEvent(event, agentManager)
+	}
 }

