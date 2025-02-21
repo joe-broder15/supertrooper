@@ -10,7 +10,7 @@ type ServerEventType int
 
 const (
 	ServerEventTypeError ServerEventType = iota
-	ServerEventTypeAgentC2Message
+	ServerEventTypeBeaconReq
 )
 
 type ServerEvent struct {
@@ -18,8 +18,8 @@ type ServerEvent struct {
 	Body any
 }
 
-type ServerEventAgentC2Message struct {
-	Message   messages.C2MessageBase
+type ServerEventBeaconReq struct {
+	BeaconReq messages.BeaconReq
 	AgentConn *tls.Conn
 }
 

@@ -65,9 +65,9 @@ func handleAgentConnection(tlsConn *tls.Conn, eventChannel chan ServerEvent) {
 
 	// read messages from the agent and send them to the event channel
 	for {
-		// read the hello message from the agent
-		var message messages.C2MessageBase
-		err := decoder.Decode(&message)
+		// read the beacon request from the agent
+		var beaconReq messages.BeaconReq
+		err := decoder.Decode(&beaconReq)
 
 		// if the agent connection is closed, return
 		if err == io.EOF {
@@ -81,9 +81,9 @@ func handleAgentConnection(tlsConn *tls.Conn, eventChannel chan ServerEvent) {
 
 		// send the message to the event channel
 		eventChannel <- ServerEvent{
-			Type: ServerEventTypeAgentC2Message,
-			Body: ServerEventAgentC2Message{
-				Message:   message,
+			Type: ServerEventTypeBeaconReq,
+			Body: ServerEventBeaconReq{
+				BeaconReq: beaconReq,
 				AgentConn: tlsConn,
 			},
 		}

