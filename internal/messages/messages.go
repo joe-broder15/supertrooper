@@ -55,9 +55,10 @@ type ServerInfo struct {
 
 // ReconfigureInfo holds reconfiguration parameters sent from the server to the agent.
 type ReconfigureInfo struct {
-	BeaconInterval    int  `json:"beacon_interval"`
-	MissesBeforeDeath int  `json:"misses_before_death"`
-	Persist           bool `json:"persist"`
+	AgentID           string `json:"agent_id"`
+	BeaconInterval    int    `json:"beacon_interval"`
+	MissesBeforeDeath int    `json:"misses_before_death"`
+	Persist           bool   `json:"persist"`
 }
 
 // ---------------------------------------------------------------------

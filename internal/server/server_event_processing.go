@@ -11,7 +11,7 @@ import (
 )
 
 // build a beacon response for an agent
-func buildBeaconRsp(agentManager *AgentManager) (messages.BeaconRsp, error) {
+func buildBeaconRsp(agentManager *AgentManager, agentID string) (messages.BeaconRsp, error) {
 
 	// build the server info
 	serverInfo := messages.ServerInfo{
@@ -22,6 +22,7 @@ func buildBeaconRsp(agentManager *AgentManager) (messages.BeaconRsp, error) {
 
 	// build the reconfigure info
 	reconfigureInfo := messages.ReconfigureInfo{
+		AgentID:           agentID,
 		BeaconInterval:    10,
 		MissesBeforeDeath: 3,
 		Persist:           false,
@@ -87,7 +88,7 @@ func processBeaconReqEvent(event ServerEventBeaconReq, agentManager *AgentManage
 	//  TODO: process the job responses
 
 	// build the beacon response
-	beaconRsp, err := buildBeaconRsp(agentManager)
+	beaconRsp, err := buildBeaconRsp(agentManager, agentID)
 	if err != nil {
 		return fmt.Errorf("server: error building beacon response: %v", err)
 	}

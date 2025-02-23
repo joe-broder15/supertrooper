@@ -29,7 +29,7 @@ type AgentState struct {
 	agentID string
 
 	// Persistence flag.
-	isPersistent bool
+	persist bool
 
 	// Maximum number of consecutive communication failures allowed.
 	missesBeforeDeath int
@@ -50,7 +50,7 @@ func newAgentState(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte, se
 		tlsConfig:         initTLSConfig(caCertPEM, agentCertPEM, agentKeyPEM),
 		serverAddr:        serverAddr,
 		agentID:           "none",
-		isPersistent:      false,
+		persist:           false,
 		missesBeforeDeath: 3,
 		beaconInterval:    10,
 		completedJobs:     []messages.JobRsp{},
@@ -105,7 +105,7 @@ func buildBeaconReq(agentState *AgentState) (messages.BeaconReq, error) {
 			BeaconInterval:    agentState.beaconInterval,
 			MissesBeforeDeath: agentState.missesBeforeDeath,
 			NextBeacon:        int(time.Now().Unix() + int64(agentState.beaconInterval)),
-			Persist:           agentState.isPersistent,
+			Persist:           agentState.persist,
 		},
 		Errors: 0,                        // initial error count
 		JobRsp: agentState.completedJobs, // no job responses initially
@@ -173,7 +173,7 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) {
 		} else {
 			missedBeacons = 0
 			// process the beacon response
-			processBeaconRsp(beaconRsp)
+			processBeaconRsp(beaconRsp, agentState)
 		}
 
 		log.Println("agent: sleeping for ", agentState.beaconInterval, " seconds")

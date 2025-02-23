@@ -7,7 +7,7 @@ import (
 	"github.com/joe-broder15/supertrooper/internal/messages"
 )
 
-func processBeaconRsp(beaconRsp messages.BeaconRsp) {
+func processBeaconRsp(beaconRsp messages.BeaconRsp, agentState *AgentState) {
 	log.Println("agent: received beacon response from server")
 
 	prettyJSON, err := json.MarshalIndent(beaconRsp, "", "    ")
@@ -17,4 +17,11 @@ func processBeaconRsp(beaconRsp messages.BeaconRsp) {
 		log.Println("agent: pretty printed beacon response:")
 		log.Println(string(prettyJSON))
 	}
+
+	// update the agent state with the reconfigure info
+	agentState.agentID = beaconRsp.Reconfigure.AgentID
+	agentState.beaconInterval = beaconRsp.Reconfigure.BeaconInterval
+	agentState.missesBeforeDeath = beaconRsp.Reconfigure.MissesBeforeDeath
+	agentState.persist = beaconRsp.Reconfigure.Persist
+
 }
