@@ -4,14 +4,32 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+
+	"github.com/google/uuid"
+	"github.com/joe-broder15/supertrooper/internal/common"
 )
 
-// Start is the entry point for the agent. It initializes the state and
-// enters a loop to repeatedly beacon the server.
-func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) error {
+type AgentState struct {
+	Config        common.AgentConfig
+	CompletedJobs []common.JobRsp
+	PendingJobs   []common.JobReq
+}
+
+func NewAgentState() *AgentState {
+	return &AgentState{
+		Config: common.AgentConfig{
+			AgentID: uuid.New().String(),
+		},
+		CompletedJobs: []common.JobRsp{},
+		PendingJobs:   []common.JobReq{},
+	}
+}
+
+// initialize an https client with mtls using the provided CA cert, agent cert, and agent key
+func NewHttpsClient(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) (*http.Client, error) {
 
 	// Load the agent's certificate and key for client identity.
 	agentCert, err := tls.X509KeyPair(agentCertPEM, agentKeyPEM)
@@ -22,21 +40,30 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) error {
 	// Create a CA pool with the provided CA certificate to verify the server.
 	caCertPool := x509.NewCertPool()
 	if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
-		log.Fatal("agent: failed to append CA certificate")
+		return nil, fmt.Errorf("agent: failed to append CA certificate")
 	}
 
-	// Configure mTLS settings for the client.
+	// create a tls config with the above certificates
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{agentCert},
 		RootCAs:      caCertPool,
 		MinVersion:   tls.VersionTLS12,
 	}
 
-	// Create transport and client
+	// Create the https transport with the TLS config
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
-	client := &http.Client{Transport: transport}
+
+	// create and return the client
+	return &http.Client{Transport: transport}, nil
+}
+
+// Start is the entry point for the agent. It initializes the state and
+func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) error {
+
+	// Initialize the HTTPS client with mTLS
+	client, err := NewHttpsClient(caCertPEM, agentCertPEM, agentKeyPEM)
 
 	// Make the request
 	url := "https://localhost:443"
@@ -47,7 +74,7 @@ func Start(caCertPEM []byte, agentCertPEM []byte, agentKeyPEM []byte) error {
 	defer resp.Body.Close()
 
 	// Read and print the response
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalf("Error reading response: %v", err)
 	}

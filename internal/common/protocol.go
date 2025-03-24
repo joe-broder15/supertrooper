@@ -1,7 +1,7 @@
 package common
 
 // ====================================================
-// JSON DATASTRUCTURES FOR BEACON REQUESTS AND RESPONSE
+// DATASTRUCTURES FOR BEACON REQUESTS AND RESPONSE
 // ====================================================
 
 // information about host operating system for an agent
@@ -27,12 +27,12 @@ type AgentConfig struct {
 type BeaconReq struct {
 	AgentConfig  AgentConfig
 	SystemInfo   BeaconReqSystemInfo
-	JobResponses []any
+	JobResponses []JobRsp
 }
 
 type BeaconRsp struct {
 	AgentConfig AgentConfig
-	JobRequests []any
+	JobRequests []JobReq
 	Die         bool
 }
 
@@ -40,19 +40,15 @@ type BeaconRsp struct {
 // DATASTRUCTURES FOR JOB REQUESTS AND RESPONSE
 // ====================================================
 
-// different job engines / methods of executing jobs. these are families
-type JobEngine = int
-
-const (
-	JobEngineCore JobEngine = iota
-	JobEnginePowerShell
-)
-
 // specific job types that can be executed by different engines
 type JobType = int
 
 const (
 	JobTypeGetFile JobType = iota
+	JobTypePutFile
+	JobTypeDirList
+	JobTypeSurvey
+	JobTypeExecCmd
 )
 
 // job priorities that indicate whether early callbacks are needed
@@ -63,12 +59,10 @@ const (
 	JobPriorityHigh
 )
 
-// job statuses
-
+// actual structures for job requests and responses
 type JobReq struct {
 	JobID       string
 	JobPriority JobPriority
-	JobEngine   JobEngine
 	JobType     JobType
 	JobArgs     string
 	JobPayload  string
