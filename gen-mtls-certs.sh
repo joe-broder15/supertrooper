@@ -3,13 +3,13 @@ export MSYS_NO_PATHCONV=1
 
 # Create directories for storing certificates
 mkdir -p certs/ca certs/server certs/agent
-mkdir -p cmd/super-agent/embed
+mkdir -p cmd/agent/embed
 
 echo "Removing existing certificates..."
 rm -rf certs/ca/*
 rm -rf certs/server/*
 rm -rf certs/agent/*
-rm -rf cmd/super-agent/embed/*
+rm -rf cmd/agent/embed/*
 
 
 ###########################################################
@@ -39,11 +39,11 @@ openssl genpkey -algorithm RSA -out certs/agent/agent_private_key.pem
 openssl req -new -key ./certs/agent/agent_private_key.pem -out ./certs/agent/agent.csr -subj "/C=US/ST=CA/L=SanFrancisco/O=MyOrg/OU=Client/CN=MyClient"
 openssl x509 -req -in ./certs/agent/agent.csr -CA ./certs/ca/ca_cert.pem -CAkey ./certs/ca/ca_private_key.pem -CAcreateserial -out ./certs/agent/agent_cert.pem -days 365
 
-# Copy certificates to embed directory (if required by super-agent)
-cp ./certs/server/server_cert.pem cmd/super-agent/embed/server_cert.pem
-cp ./certs/agent/agent_cert.pem cmd/super-agent/embed/agent_cert.pem
-cp ./certs/agent/agent_private_key.pem cmd/super-agent/embed/agent_private_key.pem
-cp ./certs/ca/ca_cert.pem cmd/super-agent/embed/ca_cert.pem 
+# Copy certificates to embed directory (if required by agent)
+cp ./certs/server/server_cert.pem cmd/agent/embed/server_cert.pem
+cp ./certs/agent/agent_cert.pem cmd/agent/embed/agent_cert.pem
+cp ./certs/agent/agent_private_key.pem cmd/agent/embed/agent_private_key.pem
+cp ./certs/ca/ca_cert.pem cmd/agent/embed/ca_cert.pem 
 
 echo "Cleaning up temporary files..."
 rm -f ./certs/server/server.csr ./certs/agent/agent.csr ./certs/ca/ca_cert.srl
