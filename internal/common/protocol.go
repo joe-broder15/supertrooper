@@ -1,11 +1,13 @@
 package common
 
+import "encoding/json"
+
 // ====================================================
 // DATASTRUCTURES FOR BEACON REQUESTS AND RESPONSE
 // ====================================================
 
 // information about host operating system for an agent
-type BeaconReqSystemInfo struct {
+type AgentHostInfo struct {
 	HostName   string
 	InternalIP string
 	Locale     string
@@ -14,26 +16,24 @@ type BeaconReqSystemInfo struct {
 
 // information about the agent itself to report or update
 type AgentConfig struct {
-	AgentID            string
-	ServerAddr         string
-	ServerPort         int
-	BeaconInterval     int
-	BeaconTries        int
-	NextBeaconExpected int
-	Persist            bool
+	AgentID        string
+	ServerAddr     string
+	BeaconInterval int
+	BeaconTries    int
+	Persist        bool
 }
 
 // the entire structure sent to the server
 type BeaconReq struct {
-	AgentConfig  AgentConfig
-	SystemInfo   BeaconReqSystemInfo
-	JobResponses []JobRsp
+	AgentConfig        AgentConfig
+	AgentHostInfo      AgentHostInfo
+	NextBeaconExpected int
+	JobResponses       []JobRsp
 }
 
 type BeaconRsp struct {
-	AgentConfig AgentConfig
+	ServerID    string
 	JobRequests []JobReq
-	Die         bool
 }
 
 // ====================================================
@@ -44,11 +44,9 @@ type BeaconRsp struct {
 type JobType = int
 
 const (
-	JobTypeGetFile JobType = iota
-	JobTypePutFile
-	JobTypeDirList
-	JobTypeSurvey
-	JobTypeExecCmd
+	JobTypeReconfigure JobType = iota
+	JobTypeUninstall
+	JobTypeExecPSPlugin
 )
 
 // job priorities that indicate whether early callbacks are needed
@@ -59,17 +57,37 @@ const (
 	JobPriorityHigh
 )
 
+// job statuses for completed jobs
+type JobStatus = int
+
+const (
+	JobStatusFailed = iota
+	JobStatusSuccess
+)
+
 // actual structures for job requests and responses
 type JobReq struct {
 	JobID       string
 	JobPriority JobPriority
 	JobType     JobType
-	JobArgs     string
-	JobPayload  string
+	JobPayload  json.RawMessage
+}
+
+// job args for reconfigure
+type JobPayloadReconfigure struct {
+	AgentConfig AgentConfig
+}
+
+// job args for executing powershell plugins
+type JobPayloadExecPSPlugin struct {
+	PluginType int
+	Args       string
+	Script     string
 }
 
 type JobRsp struct {
-	JobRequest JobReq
-	Results    string
-	Errors     []error
+	JobReq    JobReq
+	Results   string
+	JobStatus JobStatus
+	Errors    []error
 }

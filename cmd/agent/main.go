@@ -18,5 +18,8 @@ var agentKeyPEM []byte
 var caCertPEM []byte
 
 func main() {
-	agent.Start(caCertPEM, agentCertPEM, agentKeyPEM)
+	err := agent.Start(caCertPEM, agentCertPEM, agentKeyPEM)
+	if err != nil {
+		println(err)
+	}
 }

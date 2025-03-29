@@ -3,14 +3,21 @@ package server
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, Secure mTLS World!")
+type ServerState struct {
+	agentManager *agentManager
+	jobManager   *jobManager
+}
+
+func NewServerState() *ServerState {
+	return &ServerState{
+		agentManager: newAgentManager(),
+		jobManager:   newJobManager(),
+	}
 }
 
 func Start(serverCertFile string, serverKeyFile string, caCertFile string, configFile string) {
@@ -46,8 +53,11 @@ func Start(serverCertFile string, serverKeyFile string, caCertFile string, confi
 		TLSConfig: tlsConfig,
 	}
 
+	// initialize server state
+	serverState := NewServerState()
+
 	// register functions
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/", serverState.HandleBeacon)
 
 	// Start the server
 	log.Println("Starting mTLS server on :443")
